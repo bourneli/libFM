@@ -1,0 +1,19 @@
+package protobuf;
+
+option java_package = "com.tencent.tdw.spark.examples.protobuf";
+option java_outer_classname = "AddressBookProtos";
+
+// Our address book file is just one of these.
+message address_book {
+  required int32 id = 1;
+
+  message Person {
+    required string name = 1;
+    required int32 id = 2;        // Unique ID number for this person.
+    optional string email = 3;
+  }
+
+  repeated Person person = 2;
+}
+
+
