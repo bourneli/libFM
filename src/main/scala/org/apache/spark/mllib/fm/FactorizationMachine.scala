@@ -246,10 +246,11 @@ class FMGradient(val task: Int, val k0: Boolean, val k1: Boolean, val k2: Int,
     cumulateGradient(data, weights, pred, label, sum, cumGradient)
 
     task match {
-      case 0 =>
-        (pred - label) * (pred - label)
-      case 1 =>
-        1 - Math.signum(pred * label)
+      case 0 => new SquaredErrorLoss().compute(pred,label)
+        //(pred - label) * (pred - label)
+      case 1 => new LogitLoss().compute(pred,label)
+         //  Math.log(1+Math.exp(-label*pred))
+        // 1 - Math.signum(pred * label)
     }
   }
 }

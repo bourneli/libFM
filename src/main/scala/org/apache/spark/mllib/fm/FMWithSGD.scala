@@ -44,6 +44,40 @@ object FMWithSGD {
       .run(input)
   }
 
+  /**
+    *
+    * Train a Factoriaton Machine Regression model given an RDD of (label, features) pairs. We run a fixed number
+    * of iterations of gradient descent using the specified step size. Each iteration uses
+    * `miniBatchFraction` fraction of the data to calculate a stochastic gradient. The weights used
+    * in gradient descent are initialized using the initial weights provided.
+    *
+    * @param input RDD of (label, array of features) pairs. Each pair describes a row of the data
+    *              matrix A as well as the corresponding right hand side label y.
+    * @param task 0 for Regression, and 1 for Binary Classification
+    * @param numIterations Number of iterations of gradient descent to run.
+    * @param stepSize Step size to be used for each iteration of gradient descent.
+    * @param miniBatchFraction Fraction of data to be used per iteration.
+    * @param dim A (Boolean,Boolean,Int) 3-Tuple stands for whether the global bias term should be used, whether the
+    *            one-way interactions should be used, and the number of factors that are used for pairwise
+    *            interactions, respectively.
+    * @param regParam A (Double,Double,Double) 3-Tuple stands for the regularization parameters of intercept, one-way
+    *                 interactions and pairwise interactions, respectively.
+    * @param initStd Standard Deviation used for factorization matrix initialization.
+      * @return model and loss
+      */
+  def trainWithLoss(input: RDD[LabeledPoint],
+            task: Int,
+            numIterations: Int,
+            stepSize: Double,
+            miniBatchFraction: Double,
+            dim: (Boolean, Boolean, Int),
+            regParam: (Double, Double, Double),
+            initStd: Double): (FMModel,Array[Double]) = {
+    new FMWithSGD(task, stepSize, numIterations, dim, regParam, miniBatchFraction)
+        .setInitStd(initStd)
+        .runWithLoss(input)
+  }
+
   def train(input: RDD[LabeledPoint],
             task: Int,
             numIterations: Int): FMModel = {
@@ -214,7 +248,13 @@ class FMWithSGD(private var task: Int,
     * Run the algorithm with the configured parameters on an input RDD
     * of LabeledPoint entries.
     */
-  def run(input: RDD[LabeledPoint]): FMModel = {
+  /**
+    * Run the algorithm with the configured parameters on an input RDD
+    * of LabeledPoint entries.
+    * @param input
+    * @return model and loss
+      */
+  def runWithLoss(input: RDD[LabeledPoint]): (FMModel,Array[Double]) = {
 
     this.numFeatures = input.first().features.size
     require(numFeatures > 0)
@@ -233,14 +273,7 @@ class FMWithSGD(private var task: Int,
     }
 
     val gradient = new FMGradient(task, k0, k1, k2, numFeatures, minLabel, maxLabel)
-
     val updater = new FMUpdater(k0, k1, k2, r0, r1, r2, numFeatures)
-
-    val optimizer = new GradientDescent(gradient, updater)
-      .setStepSize(stepSize)
-      .setNumIterations(numIterations)
-      .setMiniBatchFraction(miniBatchFraction)
-      .setConvergenceTol(Double.MinPositiveValue)
 
     val data = task match {
       case 0 =>
@@ -250,9 +283,25 @@ class FMWithSGD(private var task: Int,
     }
 
     val initWeights = generateInitWeights()
+    val (weights, loss) = GradientDescent.runMiniBatchSGD(
+      data,
+      gradient,
+      updater,
+      stepSize,
+      numIterations,
+      0,
+      miniBatchFraction,
+      initWeights,
+      Double.MinPositiveValue)
 
-    val weights = optimizer.optimize(data, initWeights)
-
-    createModel(weights)
+    (createModel(weights), loss)
   }
+
+
+  /**
+    * Run the algorithm with the configured parameters on an input RDD
+    * of LabeledPoint entries.
+    */
+  def run(input: RDD[LabeledPoint]): FMModel = runWithLoss(input)._1
+
 }
